@@ -3,7 +3,7 @@ import validation_tools as vt
 from utils.config import load_settings
 import glob
 
-variables, latitude, longitude, gmt, name = load_settings()
+variables, latitude, longitude, gmt, name, alias = load_settings()
 ALLOWED_VARS = variables
 MIN_YEAR = 2010
 

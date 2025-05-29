@@ -6,14 +6,14 @@ def panel_explorador():
         ui.input_date_range(
             "fechas",
             "Fechas:",
-            start="2010-01-01",
+            start="2023-11-01",
             end="2025-12-31",
             min="2010-01-01",
             max="2025-12-31",
             language="es",
             separator="a",
         ),
-        ui.output_plot("plot_matplotlib"),
+        ui.output_plot("plot_matplotlib",fill=True),
     )
 
 
