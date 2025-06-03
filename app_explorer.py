@@ -5,11 +5,11 @@ from components.panels import panel_documentacion, panel_trayectoriasolar, panel
 from utils.data_processing import load_esolmet_data
 from utils.graficadores import graficado_Is_matplotlib
 #import plotly.express as px
-from utils.config import load_settings
 # import duckdb
+from utils.config import load_settings
 
 
-variables, latitude, longitude, gmt, name, alias = load_settings()
+variables, latitude, longitude, gmt, name = load_settings()
 # con = duckdb.connect('esolmet.db')
 
 #No voy a usar plotly por el momento hasta no tener idea de los datos

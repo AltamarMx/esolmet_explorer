@@ -3,8 +3,8 @@ import validation_tools as vt
 from utils.config import load_settings
 import glob
 
-variables, latitude, longitude, gmt, name, alias = load_settings()
-ALLOWED_VARS = variables
+variables, latitude, longitude, gmt, name = load_settings()
+ALLOWED_VARS = list(variables.keys())
 MIN_YEAR = 2010
 
 
@@ -125,9 +125,9 @@ def export_data(filepath: str) -> pd.DataFrame:
     # 1. cargar y limpiar
     df = load_csv(filepath, sort=False)
 
-    # 2. renombrar columnas según alias definido en configuration.ini
-    if alias:
-        df.rename(columns=alias, inplace=True)
+    # 2. renombrar columnas según los nombres configurados
+    if variables:
+        df.rename(columns=variables, inplace=True)
 
     # 3. convertir la fecha a string
     df['TIMESTAMP'] = df['TIMESTAMP'].dt.strftime('%Y-%m-%d %H:%M')
