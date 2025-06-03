@@ -78,21 +78,11 @@ def detect_nats(df: pd.DataFrame) -> bool:
 
 
 def detect_duplicates(df: pd.DataFrame) -> bool:
-    """
-    Checks if a DataFrame contains duplicate rows based on its index.
-    
-    Parameters:
-        df (pd.DataFrame): The DataFrame to check for duplicate rows.
-    
-    Returns:
-        bool: True if there are no duplicate rows; False if duplicate rows exist.
-    """
-    if df.index.duplicated().any():
-        tag_duplicates = False
-    else:
-        tag_duplicates = True
+    """Return ``True`` if the ``DataFrame`` contains no duplicate rows."""
 
-    return tag_duplicates
+    # ``DataFrame.duplicated`` checks row-wise duplicates ignoring the index.
+    has_dups = df.duplicated().any()
+    return not has_dups
 
 
 def detect_dtype(columns_expected_type: Dict[str, str], data: pd.DataFrame) -> bool:
