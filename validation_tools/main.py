@@ -122,8 +122,8 @@ def detect_radiation(df: pd.DataFrame, config_path: str = "configuration.ini") -
     Parameters:
         df (pd.DataFrame): DataFrame with
             - a naive DatetimeIndex representing local time.
-            - one or more of the radiation columns:
-              'I_dir_Avg', 'I_glo_Avg', 'I_dif_Avg', 'I_uv_Avg'.
+            - una o más de las columnas de radiación renombradas según la
+              configuración.
         config_path (str): Path to the configuration INI file
             containing [settings] with latitude, longitude, and tz name.
 
@@ -134,7 +134,7 @@ def detect_radiation(df: pd.DataFrame, config_path: str = "configuration.ini") -
               when solar_altitude ≤ 0; False otherwise.
     """
     vars_dict, lat, lon, gmt, name = load_settings(config_path)
-    vars_list = list(vars_dict.keys())
+    vars_list = list(vars_dict.values())
 
     # 1) generar tz a partir de gmt
     inv = -gmt

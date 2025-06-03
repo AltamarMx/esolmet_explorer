@@ -4,7 +4,8 @@ from utils.config import load_settings
 import glob
 
 variables, latitude, longitude, gmt, name = load_settings()
-ALLOWED_VARS = list(variables.keys())
+# Lista de variables permitidas utilizando los nombres ya renombrados
+ALLOWED_VARS = list(variables.values())
 MIN_YEAR = 2010
 
 
@@ -52,17 +53,21 @@ def load_csv(filepath: str, sort: bool = True) -> pd.DataFrame:
     df.rename(columns={df.columns[0]: "TIMESTAMP"}, inplace=True)
     df["TIMESTAMP"] = pd.to_datetime(df["TIMESTAMP"], errors="coerce")
 
-    # 3. eliminar columnas innecesarias
+    # 3. renombrar variables utilizando el diccionario de configuración
+    if variables:
+        df.rename(columns=variables, inplace=True)
+
+    # 4. eliminar columnas innecesarias
     drop_cols = [c for c in df.columns if c.startswith("Unnamed")
                  or c == "RECORD"
                  or c not in (["TIMESTAMP"] + ALLOWED_VARS)]
     if drop_cols:
         df.drop(columns=drop_cols, inplace=True)
 
-    # 4. filtrar año mínimo
+    # 5. filtrar año mínimo
     df = df[df["TIMESTAMP"].dt.year >= MIN_YEAR]
 
-    # 5. convertir datos a float y limpiar nulos/duplicados
+    # 6. convertir datos a float y limpiar nulos/duplicados
     for col in df.columns:
         if col != "TIMESTAMP":
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -71,7 +76,7 @@ def load_csv(filepath: str, sort: bool = True) -> pd.DataFrame:
     df.dropna(axis=0, how="any", subset=[c for c in df.columns if c!="TIMESTAMP"], inplace=True)
     df.drop_duplicates(inplace=True)
 
-    # 6. ordenar
+    # 7. ordenar
     if sort:
         df.sort_values("TIMESTAMP", inplace=True)
         df.reset_index(drop=True, inplace=True)
@@ -167,7 +172,10 @@ def radiacion(df, rad_columns=None):
     rad_df = rad_df.rename(columns={'solar_altitude': 'altura_solar'})
 
     # 4. columnas de radiación
-    cols = rad_columns or ['I_dir_Avg', 'I_glo_Avg', 'I_dif_Avg', 'I_dif_Calc', 'I_uv_Avg']
+    default_cols = [variables.get(c, c) for c in ['I_dir_Avg', 'I_glo_Avg', 'I_dif_Avg', 'I_uv_Avg']]
+    if 'I_dif_Calc' in df.columns:
+        default_cols.append('I_dif_Calc')
+    cols = rad_columns or default_cols
     cols = [c for c in cols if c in rad_df.columns]
     if not cols:
         raise KeyError("No hay columnas de radiación para filtrar.")
