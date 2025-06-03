@@ -6,7 +6,8 @@ from matplotlib.gridspec import GridSpec
 from utils.config import load_settings
 
 
-variables, _, _, _, _, names = load_settings()
+variables, _, _, _, _ = load_settings()
+names = variables
 con = duckdb.connect('esolmet.db')
 
 def graficado_Is_matplotlib(fechas):
