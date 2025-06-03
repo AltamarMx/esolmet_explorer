@@ -1,19 +1,22 @@
 import matplotlib.pyplot as plt
-import duckdb 
+import duckdb
 from windrose import WindroseAxes
 from matplotlib.gridspec import GridSpec
 
 from utils.config import load_settings
 
 
-variables, _, _, _, _ = load_settings()
-names = variables
+_vars, _, _, _, _ = load_settings()
 con = duckdb.connect('esolmet.db')
 
-def graficado_Is_matplotlib(fechas):
+
+def graficado_Is_matplotlib(fechas, alias_dict=None):
     
     
-    # 1) Carga y pivoteo
+    # 1) parámetros y diccionario de alias
+    alias = alias_dict or _vars
+
+    # 2) Carga y pivoteo
     query = f"""
     SELECT *
       FROM lecturas
@@ -23,11 +26,10 @@ def graficado_Is_matplotlib(fechas):
     """
     df = con.execute(query).fetchdf()
     df = df.pivot(index='fecha', columns='variable', values='valor')
-    df = df.rename(columns=names)
 
-    # 2) Identificar columnas I*
+    # 3) Identificar columnas de irradiancia (empiezan con 'i')
     columnas = df.columns
-    Is = [col for col in columnas if col.startswith("I")]
+    Is = [c for c in columnas if c.lower().startswith('i')]
 
     # 3) Figure + GridSpec
     fig = plt.figure()
@@ -44,15 +46,21 @@ def graficado_Is_matplotlib(fechas):
     ax_p    = fig.add_subplot(gs[2, 0], sharex=ax_te)
     ax_is   = fig.add_subplot(gs[3, 0], sharex=ax_te)
     ax_wind = fig.add_subplot(gs[:, 1], projection='windrose')
-    
 
-    # Graficar Te
-    ax_te.plot(df.index, df["Te"], label="Te",c="k",alpha=0.8)
-    ax_te.set_ylabel("Te [oC]")
+
+    temp_col = alias.get('AirTC_Avg', 'AirTC_Avg')
+    pres_col = alias.get('CS106_PB_Avg', 'CS106_PB_Avg')
+    hr_col   = alias.get('RH', 'RH')
+    ws_col   = alias.get('WS_ms_Avg', 'WS_ms_Avg')
+    wd_col   = alias.get('WindDir', 'WindDir')
+
+    # Graficar temperatura
+    ax_te.plot(df.index, df[temp_col], label=temp_col, c="k", alpha=0.8)
+    ax_te.set_ylabel("Te [°C]")
     ax_te.legend(loc="upper left")
 
-    # Graficar P
-    ax_p.plot(df.P, label="P",alpha=0.8)
+    # Graficar presión
+    ax_p.plot(df[pres_col], label=pres_col, alpha=0.8)
     ax_p.set_ylabel("P [--]")
     ax_p.legend(loc="upper left")
 
@@ -63,12 +71,12 @@ def graficado_Is_matplotlib(fechas):
     ax_is.legend(loc="upper left")
 
     # Graficar humedad relativa hr
-    ax_hr.plot(df.hr,label="HR")
+    ax_hr.plot(df[hr_col], label="HR")
     ax_hr.set_ylim(0,100)
     ax_hr.set_ylabel("HR [%]")
 
     # 5) Rosa de vientos
-    ax_wind.bar(df["wd"], df["ws"],
+    ax_wind.bar(df[wd_col], df[ws_col],
                 normed=True, opening=0.8,
                 edgecolor="white")
     ax_wind.set_title("Rosa de Vientos")

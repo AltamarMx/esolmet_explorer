@@ -2,7 +2,7 @@ from shiny import App, ui, render
 import shinyswatch  
 from components.explorador import panel_explorador, panel_estadistica
 from components.panels import panel_documentacion, panel_trayectoriasolar, panel_fotovoltaica, panel_eolica, panel_confort
-from utils.data_processing import load_esolmet_data
+# from utils.data_processing import load_esolmet_data
 from utils.graficadores import graficado_Is_matplotlib
 #import plotly.express as px
 # import duckdb
@@ -46,7 +46,7 @@ def server(input, output, session):
 
     @render.plot(alt='Irradiancia')
     def plot_matplotlib():
-        return graficado_Is_matplotlib( input.fechas())
+        return graficado_Is_matplotlib(input.fechas(), variables)
 
 
 app = App(app_ui, server)
