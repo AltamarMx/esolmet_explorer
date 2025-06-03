@@ -45,35 +45,31 @@ def graficado_Is_matplotlib(fechas, alias_dict=None):
     ax_is = fig.add_subplot(gs[3, 0], sharex=ax_te)
     ax_wind = fig.add_subplot(gs[:, 1], projection="windrose")
 
-    temp_col = "tdb"
-    pres_col = "pres"
-    hr_col = "rh"
-    ws_col = "ws"
-    wd_col = "wd"
 
     # Graficar temperatura
-    ax_te.plot(df.index, df[temp_col], label=temp_col, c="k", alpha=0.8)
-    ax_te.set_ylabel("Te [°C]")
+    ax_te.plot(df.index, df.tdb, label="To", c="k", alpha=0.8)
+    ax_te.set_ylabel("Temperatura [°C]")
     ax_te.legend(loc="upper left")
 
     # Graficar presión
-    ax_p.plot(df[pres_col], label=pres_col, alpha=0.8)
-    ax_p.set_ylabel("P [--]")
+    ax_p.plot(df.p_atm, label="Atmospheric pressure", alpha=0.8)
+    ax_p.set_ylabel("Presión [Pa]")
     ax_p.legend(loc="upper left")
 
     # Graficar Is
     for I in Is:
         ax_is.plot(df.index, df[I], label=I)
-    ax_is.set_ylabel("I [W/m2]")
+    ax_is.set_ylabel("Irradiancia [W/m2]")
     ax_is.legend(loc="upper left")
 
     # Graficar humedad relativa hr
-    ax_hr.plot(df[hr_col], label="HR")
+    ax_hr.plot(df.rh, label="HR")
     ax_hr.set_ylim(0, 100)
     ax_hr.set_ylabel("HR [%]")
+    ax_hr.legend()
 
     # 5) Rosa de vientos
-    ax_wind.bar(df[wd_col], df[ws_col], normed=True, opening=0.8, edgecolor="white")
+    ax_wind.bar(df.wd, df.ws, normed=True, opening=0.8, edgecolor="white")
     ax_wind.set_title("Rosa de Vientos")
 
     # 6) Formato de fecha en eje X

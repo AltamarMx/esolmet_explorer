@@ -16,3 +16,9 @@ df
 # df_wide = df_wide.sort_index()
 # print(df_wide)
 # %%
+
+from utils.config import load_settings
+
+
+_vars, _, _, _, _ = load_settings()
+_vars
