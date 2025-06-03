@@ -125,10 +125,14 @@ def export_data(filepath: str) -> pd.DataFrame:
     # 1. cargar y limpiar
     df = load_csv(filepath, sort=False)
 
-    # 2. convertir la fecha a string
+    # 2. renombrar columnas según alias definido en configuration.ini
+    if alias:
+        df.rename(columns=alias, inplace=True)
+
+    # 3. convertir la fecha a string
     df['TIMESTAMP'] = df['TIMESTAMP'].dt.strftime('%Y-%m-%d %H:%M')
 
-    # 3. transformar a formato largo
+    # 4. transformar a formato largo
     long_df = df.melt(
         id_vars=['TIMESTAMP'],
         var_name='variable',
@@ -136,7 +140,7 @@ def export_data(filepath: str) -> pd.DataFrame:
     )
     long_df.columns = ['fecha', 'variable', 'valor']
 
-    # 4. limpiar duplicados y asegurar tipo float
+    # 5. limpiar duplicados y asegurar tipo float
     long_df.drop_duplicates(subset=['fecha', 'variable'], inplace=True)
     long_df['valor'] = long_df['valor'].astype(float)
 
