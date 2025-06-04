@@ -142,7 +142,10 @@ def detect_radiation(df: pd.DataFrame, config_path: str = "configuration.ini") -
     tz = f"Etc/GMT{sign}{abs(inv)}"
 
     # 2) localizar el índice
-    df = df.tz_localize(tz)
+    if df.index.tz is None:
+        df = df.tz_localize(tz)
+    else:
+        df = df.tz_convert(tz)
 
     # 3) crear objeto Location correctamente
     loc = pvlib.location.Location(latitude=lat,
