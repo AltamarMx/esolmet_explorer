@@ -47,7 +47,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     rv_rad     = reactive.Value(None)
     # rv_nans    = reactive.Value(None)
     # rv_nats    = reactive.Value(None)
-    # rv_types   = reactive.Value(None)
+    rv_types   = reactive.Value(None)
 
     @reactive.Effect
     @reactive.event(input.info_icon)
@@ -60,26 +60,30 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.event(input.archivo)
     async def upload_status():
         archivo = req(input.archivo())[0]["datapath"]
-        total_steps = 4
+        total_steps = 5
 
         with ui.Progress(min=0, max=total_steps) as p:
             p.set(1, message="1/4 leyendo y formateando el archivo…")
-            df_fmt = load_csv(archivo)
-            rv_loaded.set(df_fmt)
+            df = load_csv(archivo)
+            rv_loaded.set(df)
 
             p.set(2, message="2/4 ejecutando pruebas de integridad…")
-            tests = run_tests(df_fmt, archivo)
+            tests = run_tests(df, archivo)
             rv_tests.set(tests)
 
             p.set(3, message="3/4 generando gráficos interactivos…")
             rv_plotly.set(graficado_plotly(archivo))
             rv_rad_plot.set(graficado_radiacion(archivo))
 
-            # p.set(4, message="4/5 analizando datos faltantes…")
-            # rv_missing.set(graficado_nulos(df_fmt))
+            p.set(4, message="4/5 analizando tipos de columnas…")
+            rv_types.set(
+                df.dtypes
+                    .rename_axis("Columna")
+                    .reset_index(name="Tipo")
+            )
 
-            p.set(4, message="4/4 calculando radiación solar…")
-            df_rad = radiacion(df_fmt)
+            p.set(5, message="5/5 calculando radiación solar…")
+            df_rad = radiacion(df)
             df_rad.index = df_rad.index.tz_localize(None)
             rv_rad.set(
                 df_rad.reset_index()
@@ -151,6 +155,10 @@ def server(input: Inputs, output: Outputs, session: Session):
     # @render.plot
     # def plot_missing():
     #     return rv_missing.get()
+
+    @render.data_frame
+    def df_types():
+        return rv_types.get()
 
     @render.data_frame
     def df_radiacion():

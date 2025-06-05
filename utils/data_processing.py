@@ -141,7 +141,7 @@ def run_tests(df: pd.DataFrame, filepath: str) -> dict:
     return {
         "Extensión .CSV":         ext,
         "Encoding UTF-8":         enc,
-        "Sin valores NaN":        nans,
+        # "Sin valores NaN":        nans,
         "Sin valores NaT":        nats,
         "Sin valores duplicados": dups,
         "Columnas tipo float":    tipos,

@@ -57,11 +57,15 @@ def panel_subir_archivo():
                 ui.output_table("table_tests"),
             ),
             ui.card(
+                ui.card_header("Columnas y tipos"),
+                ui.output_data_frame("df_types"),
+            ),
+            ui.card(
                 ui.card_header("Gráfico"),
                 output_widget("plot_plotly"),
                 full_screen=True,
             ),
-            col_widths=[3, 9],
+            col_widths=[3, 2, 7],
         ),
     )
 
@@ -107,7 +111,7 @@ def panel_cargar_datos():
             ui.card_body(
                 ui.layout_column_wrap(
                     ui.div(
-                        ui.p("Selecciona una acción para proceder."),
+                        ui.p("Selecciona una acción para proceder"),
                         ui.output_ui("load_status"),
                         ui.output_ui("delete_status"),
                         class_="flex-grow-1"
