@@ -3,40 +3,53 @@ import plotly.graph_objects as go
 from utils.data_processing import load_csv, radiacion
 
 def graficado_plotly(path_archivo: str, columnas: list[str] = None) -> go.Figure:
-    # 1. cargar datos
+    """
+    - carga el CSV con load_csv (que devuelve un DataFrame con TIMESTAMP como índice datetime)
+    - convierte el índice TIMESTAMP en columna de texto con formato "YYYY-MM-DD HH:MM"
+    - selecciona las variables a graficar (todas las columnas numéricas, salvo TIMESTAMP_str)
+    - construye un scattergl para cada variable
+    """
+
+    # 1. cargar datos (load_csv ya deja TIMESTAMP como índice datetime)
     df = load_csv(path_archivo)
 
-    # 2. preparar TIMESTAMP para graficar
-    df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'], errors='coerce')
-    df = df.dropna(subset=['TIMESTAMP'])
-    df['TIMESTAMP'] = df['TIMESTAMP'].dt.strftime("%Y-%m-%d %H:%M")
+    # 2. resetear índice para que TIMESTAMP vuelva a ser columna y formatearla
+    df = df.reset_index()  # ahora 'TIMESTAMP' es columna de tipo datetime
+    df["TIMESTAMP"] = df["TIMESTAMP"].dt.strftime("%Y-%m-%d %H:%M")
 
-    # 3. determinar qué variables graficar
+    # 3. determinar qué variables graficar (descartar la columna TIMESTAMP)
     variables = columnas or [c for c in df.columns if c != "TIMESTAMP"]
 
     # 4. construir figura
     fig = go.Figure()
     for var in variables:
+        if var not in df.columns:
+            # si el usuario pidió una columna que no existe, la omitimos
+            continue
         mask = df[var].notna()
         fig.add_trace(
             go.Scattergl(
-                x=df.loc[mask, "TIMESTAMP"],
-                y=df.loc[mask, var],
-                mode="markers",
-                name=var,
-                marker=dict(size=5),
+                x = df.loc[mask, "TIMESTAMP"],
+                y = df.loc[mask, var],
+                mode = "markers",
+                name = var,
+                marker = dict(size=5),
             )
         )
 
     # 5. configurar layout
     fig.update_layout(
-        hovermode="x unified",
-        showlegend=True,
-        xaxis_title="TIMESTAMP",
-        yaxis_title="Valores",
+        hovermode = "x unified",
+        showlegend = True,
+        xaxis_title = "TIMESTAMP",
+        yaxis_title = "Valores",
     )
-    fig.update_xaxes(showgrid=True, tickformat="%Y-%m-%d %H:%M", tickmode="auto")
-    fig.update_yaxes(showgrid=True)
+    fig.update_xaxes(
+        showgrid = True,
+        tickformat = "%Y-%m-%d %H:%M",
+        tickmode = "auto",
+    )
+    fig.update_yaxes(showgrid = True)
 
     return fig
 

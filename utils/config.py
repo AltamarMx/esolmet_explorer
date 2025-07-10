@@ -21,4 +21,3 @@ def load_settings(path: str = "configuration.ini"):
     gmt       = sec.getint("gmt", fallback=0)
     name      = sec.get("name", fallback="")
     return variables, latitude, longitude, gmt, name
-

@@ -1,12 +1,13 @@
 import pandas as pd
+import numpy as np
 import validation_tools as vt
 from utils.config import load_settings
 import glob
 
 variables, latitude, longitude, gmt, name = load_settings()
-# Lista de variables permitidas utilizando los nombres ya renombrados
 ALLOWED_VARS = list(variables.values())
 MIN_YEAR = 2010
+SOLAR_CONSTANT = 1361  # W/m², constante solar
 
 
 def _detect_csv(filepath: str) -> dict:
@@ -21,25 +22,28 @@ def _detect_csv(filepath: str) -> dict:
     return {"encoding": encoding, "skiprows": skiprows}
 
 
-def load_csv(filepath: str, sort: bool = True) -> pd.DataFrame:
+def load_csv(filepath: str) -> pd.DataFrame:
     """
     Carga y limpia CSV en formato ancho:
-      - lee y parsea fechas
-      - filtra sólo variables permitidas
-      - convierte todas las columnas (excepto TIMESTAMP) a float
-      - elimina columnas 'RECORD' y 'Unnamed*'
-      - filtra TIMESTAMP ≥ MIN_YEAR
-      - elimina filas con NaN en TIMESTAMP o en datos
-      - elimina duplicados
-      - ordena por TIMESTAMP
+      1. lee y parsea fechas
+      2. descarta filas con TIMESTAMP NaT o año < MIN_YEAR
+      3. define TIMESTAMP como índice datetime
+      4. filtra sólo variables permitidas
+      5. elimina columnas 'RECORD' y 'Unnamed*'
+      6. convierte todas las columnas (índice excluido) a float
+      7. elimina duplicados (basados en índice y valores)
+      8. ordena por TIMESTAMP
+      9. limpieza para columnas de radiación (dni, ghi, dhi):
+         - valores < 0 → 0
+         - valores > constante solar → NaN
+         - valores > 0 cuando altitud solar ≤ 0 → NaN
     """
-    # 1. leer crudo
+    # 1. leer crudo 
     params = _detect_csv(filepath)
     common_kwargs = dict(
         filepath_or_buffer=filepath,
         skiprows=params["skiprows"],
-        parse_dates=[0],
-        dayfirst=True,
+        dayfirst=False,
         low_memory=False,
         encoding=params["encoding"],
     )
@@ -49,37 +53,62 @@ def load_csv(filepath: str, sort: bool = True) -> pd.DataFrame:
         common_kwargs["encoding"] = "latin-1"
         df = pd.read_csv(**common_kwargs)
 
-    # 2. renombrar fecha y asegurar datetime
+    # 2. renombrar primera columna a TIMESTAMP y definir datetime
     df.rename(columns={df.columns[0]: "TIMESTAMP"}, inplace=True)
     df["TIMESTAMP"] = pd.to_datetime(df["TIMESTAMP"], errors="coerce")
 
-    # 3. renombrar variables utilizando el diccionario de configuración
+    # 3. descartar filas con TIMESTAMP NaT y filtrar año mínimo
+    df = df.dropna(subset=["TIMESTAMP"])
+    df = df[df["TIMESTAMP"].dt.year >= MIN_YEAR]
+
+    # 4. definir TIMESTAMP como índice datetime
+    df.set_index("TIMESTAMP", inplace=True)
+
+    # 5. renombrar variables usando el diccionario
     if variables:
         df.rename(columns=variables, inplace=True)
 
-    # 4. eliminar columnas innecesarias
-    drop_cols = [c for c in df.columns if c.startswith("Unnamed")
-                 or c == "RECORD"
-                 or c not in (["TIMESTAMP"] + ALLOWED_VARS)]
-    if drop_cols:
-        df.drop(columns=drop_cols, inplace=True)
+    # 6. eliminar columnas innecesarias:
+    #    - cualquier columna que empiece con 'Unnamed'
+    #    - 'RECORD'
+    #    - columnas que no estén en ALLOWED_VARS
+    drop_cols = [
+        c for c in df.columns
+        if c.startswith("Unnamed") or c == "RECORD" or c not in ALLOWED_VARS
+    ]
+    df.drop(columns=drop_cols, inplace=True)
 
-    # 5. filtrar año mínimo
-    df = df[df["TIMESTAMP"].dt.year >= MIN_YEAR]
-
-    # 6. convertir datos a float y limpiar nulos/duplicados
+    # 7. convertir todas las columnas (ahora que el índice es TIMESTAMP) a numérico (float)
     for col in df.columns:
-        if col != "TIMESTAMP":
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    df.dropna(subset=["TIMESTAMP"], inplace=True)
-    df.dropna(axis=0, how="any", subset=[c for c in df.columns if c!="TIMESTAMP"], inplace=True)
-    df.drop_duplicates(inplace=True)
+    # 8. eliminar duplicados (basados en índice y valores de columnas)
+    df = df[~df.index.duplicated(keep="first")]  # quita duplicados en el índice
+    df = df.drop_duplicates()                     # quita duplicados completos de filas
 
-    # 7. ordenar
-    if sort:
-        df.sort_values("TIMESTAMP", inplace=True)
-        df.reset_index(drop=True, inplace=True)
+    # 9. ordenar por TIMESTAMP
+    df.sort_index(inplace=True)
+
+    # 10. limpieza para columnas de radiación (solo dni, ghi, dhi)
+    rad_cols = [col for col in ["dni", "ghi", "dhi", "uv"] if col in df.columns]
+    if rad_cols:
+        # a) valores < 0 → 0
+        df[rad_cols] = df[rad_cols].clip(lower=0)
+
+        # b) volver NaN los datos de rad_cols que excedan la constante solar
+        for col in rad_cols:
+            df.loc[df[col] > SOLAR_CONSTANT, col] = np.nan
+
+        # c) agregar columnas 'solar_altitude' y 'radiation' usando vt.detect_radiation
+        df = vt.detect_radiation(df)
+
+        # d) para horas nocturnas (solar_altitude ≤ 0), convertir rad_cols > 0 a NaN
+        noche = df["solar_altitude"] <= 0
+        for col in rad_cols:
+            df.loc[noche & (df[col] > 0), col] = np.nan
+
+        # e) eliminar columnas auxiliares antes de finalizar
+        df.drop(columns=["solar_altitude", "radiation"], inplace=True)
 
     return df
 
@@ -98,24 +127,25 @@ def run_tests(df: pd.DataFrame, filepath: str) -> dict:
     dups = vt.detect_duplicates(df)
 
     # 3) radiación nocturna
-    rad_df = df.set_index("TIMESTAMP", drop=True)
-    rad = vt.detect_radiation(rad_df, config_path="configuration.ini")["radiation_ok"].all()
+    if "TIMESTAMP" in df.columns:
+        df_radiacion = df.copy()
+        df_radiacion["TIMESTAMP"] = pd.to_datetime(df_radiacion["TIMESTAMP"], errors="coerce")
+        df_radiacion = df_radiacion.set_index("TIMESTAMP")
+        rad = vt.detect_radiation(df_radiacion, config_path="configuration.ini")["radiation"].all()
+    else:
+        rad = False
 
     # 4) tipos de columna
-    expected_types = {"TIMESTAMP": "datetime64[ns]"}
-    for col in df.columns:
-        if col != "TIMESTAMP":
-            expected_types[col] = "float64"
-    tipos = vt.detect_dtype(expected_types, df)
+    tipos = vt.detect_dtype({col: "float64" for col in df.columns if col != "TIMESTAMP"}, df)
 
     return {
         "Extensión .CSV":         ext,
         "Encoding UTF-8":         enc,
-        "Sin valores NaN":        nans,
+        # "Sin valores NaN":        nans,
         "Sin valores NaT":        nats,
-        "Sin valores duplicados":         dups,
-        "Columnas tipo float":          tipos,
-        # "Sin radiación en la noche": rad,
+        "Sin valores duplicados": dups,
+        "Columnas tipo float":    tipos,
+        # "Radiación cero en noche": rad
     }
 
 
@@ -125,14 +155,13 @@ def export_data(filepath: str) -> pd.DataFrame:
       - usa load_csv para obtener DataFrame limpio en forma ancha
       - convierte TIMESTAMP a string 'YYYY-MM-DD HH:MM:SS'
       - melt a ['fecha','variable','valor']
-      - elimina duplicados y garantiza tipo float en 'valor'
+      - garantiza tipo float en 'valor'
     """
-    # 1. cargar y limpiar
-    df = load_csv(filepath, sort=False)
+    # 1. cargar
+    df = load_csv(filepath)
 
-    # 2. renombrar columnas según los nombres configurados
-    if variables:
-        df.rename(columns=variables, inplace=True)
+    # 2. resetear índice para tener TIMESTAMP como columna
+    df = df.reset_index()
 
     # 3. convertir la fecha a string
     df['TIMESTAMP'] = df['TIMESTAMP'].dt.strftime('%Y-%m-%d %H:%M')
@@ -152,43 +181,35 @@ def export_data(filepath: str) -> pd.DataFrame:
     return long_df
 
 
-def radiacion(df, rad_columns=None):
+def radiacion(df: pd.DataFrame, rad_columns=None) -> pd.DataFrame:
     """
-    Detecta eventos de radiación nocturna manteniendo solo las columnas configuradas.
+    Extrae datos de radiación durante la noche (altura solar ≤ 0):
+      - calcula la altitud solar
+      - devuelve sólo columnas de radiación y 'altura_solar'
     """
-    # 0. filtrar columnas extras
-    keep = ['TIMESTAMP'] + [c for c in ALLOWED_VARS if c in df.columns]
-    df = df.loc[:, keep].copy()
-    
-    # 1. preparar índice datetime
-    if 'TIMESTAMP' in df.columns:
-        df['TIMESTAMP'] = pd.to_datetime(df['TIMESTAMP'], errors='coerce')
-        df = df.dropna(subset=['TIMESTAMP']).set_index('TIMESTAMP')
+    # 1. calcular altura solar (agrega columnas auxiliares)
+    df_radiacion = vt.detect_radiation(df)
 
-    # 2. obtener solar_altitude y radiation_ok
-    rad_df = vt.detect_radiation(df)
+    # 2. renombrar columna a español
+    df_radiacion.rename(columns={'solar_altitude': 'altura_solar'}, inplace=True)
 
-    # 3. renombrar para usar español
-    rad_df = rad_df.rename(columns={'solar_altitude': 'altura_solar'})
+    # 3. determinar columnas de radiación
+    rad_cols = ["dni", "ghi", "dhi", "uv"]
+    default_cols = [variables.get(c, c) for c in rad_cols]
+    columnas = rad_columns or default_cols
+    columnas = [c for c in columnas if c in df_radiacion.columns]
+    if not columnas:
+        raise KeyError("No se encontraron columnas de radiación válidas en el DataFrame.")
 
-    # 4. columnas de radiación
-    default_cols = [variables.get(c, c) for c in ['I_dir_Avg', 'I_glo_Avg', 'I_dif_Avg', 'I_uv_Avg']]
-    if 'I_dif_Calc' in df.columns:
-        default_cols.append('I_dif_Calc')
-    cols = rad_columns or default_cols
-    cols = [c for c in cols if c in rad_df.columns]
-    if not cols:
-        raise KeyError("No hay columnas de radiación para filtrar.")
+    # 4. filtrar registros nocturnos
+    mask_noche = df_radiacion['altura_solar'] <= 0
+    resultado = df_radiacion.loc[mask_noche, columnas + ['altura_solar']].copy()
 
-    # 5. filtrar registros nocturnos con radiación > 0
-    mask_noche = rad_df['altura_solar'] <= 0
-    mask_rad   = rad_df[cols].gt(0).any(axis=1)
-    nocturna   = rad_df.loc[mask_noche & mask_rad, cols + ['altura_solar']]
+    # 7. redondear altitud solar
+    resultado['altura_solar'] = resultado['altura_solar'].round(2)
 
-    # 6. redondear altura solar a 2 decimales
-    nocturna['altura_solar'] = nocturna['altura_solar'].round(2)
+    return resultado
 
-    return nocturna
 
 # def _df_nans(df: pd.DataFrame, filepath: str) -> pd.DataFrame:
 #     # 1. Calcula offset según skiprows
