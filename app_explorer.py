@@ -1,5 +1,8 @@
 from shiny import App, ui, render
 import shinyswatch
+from shinywidgets import output_widget, render_widget
+
+from components.sun_path_server import sun_path_server
 from components.explorador import panel_explorador, panel_estadistica
 from components.panels import (
     panel_documentacion,
@@ -52,6 +55,9 @@ def server(input, output, session):
     @render.plot(alt="Irradiancia")
     def plot_matplotlib():
         return graficado_Is_matplotlib(input.fechas())
+    
+    sun_path_server(input, output, session)
+
 
 
 app = App(app_ui, server)
